@@ -28,6 +28,8 @@
 
 module e203_ifu(
   output[`E203_PC_SIZE-1:0] inspect_pc,
+  input  commit_excp,
+  input  commit_irq,
   output ifu_active,
   input  itcm_nohold,
 
@@ -150,6 +152,8 @@ module e203_ifu(
 
   e203_ifu_ifetch u_e203_ifu_ifetch(
     .inspect_pc   (inspect_pc),
+    .commit_excp  (commit_excp),
+    .commit_irq   (commit_irq),
     .pc_rtvec      (pc_rtvec),  
     .ifu_req_valid (ifu_req_valid),
     .ifu_req_ready (ifu_req_ready),

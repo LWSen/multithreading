@@ -28,6 +28,8 @@
 
 module e203_exu_excp(
   output  commit_trap,
+  output  commit_excp,
+  output  commit_irq,
   output  core_wfi,
   output  wfi_halt_ifu_req,
   output  wfi_halt_exu_req,
@@ -257,6 +259,9 @@ module e203_exu_excp(
   wire excp_taken_ena      = all_excp_flush_req  & excpirq_taken_ena;
   wire irq_taken_ena       = irq_flush_req       & excpirq_taken_ena;
   wire dbg_entry_taken_ena = dbg_entry_flush_req & excpirq_taken_ena;
+
+  assign commit_excp = excp_taken_ena;
+  assign commit_irq  = irq_taken_ena | dbg_entry_taken_ena; 
 
   assign excpirq_flush_add_op1 = dbg_entry_flush_req ? `E203_PC_SIZE'h800 : (all_excp_flush_req & dbg_mode) ? `E203_PC_SIZE'h808 : csr_mtvec_r;
   assign excpirq_flush_add_op2 = dbg_entry_flush_req ? `E203_PC_SIZE'h0   : (all_excp_flush_req & dbg_mode) ? `E203_PC_SIZE'h0   : `E203_PC_SIZE'b0; 

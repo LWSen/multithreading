@@ -346,8 +346,14 @@ module e203_core(
   wire [`E203_THREADS_NUM-1:0] thread_sel;
   wire [`E203_THREADS_NUM-1:0] thread_sel_next;
 
+  wire commit_excp;
+  wire commit_irq;
+  
+
   e203_ifu u_e203_ifu(
     .inspect_pc   (inspect_pc),
+    .commit_excp  (commit_excp),
+    .commit_irq   (commit_irq ),
 
     .ifu_active      (ifu_active),
     .pc_rtvec        (pc_rtvec),  
@@ -465,6 +471,7 @@ module e203_core(
   wire commit_mret;
   wire commit_trap;
   wire excp_active;
+  wire allow_switch;
 
   e203_exu u_e203_exu(
 
@@ -477,10 +484,12 @@ module e203_core(
     .eai_csr_rdata (eai_csr_rdata),
   `endif//}
 
-
+    .allow_switch           (allow_switch),
     .excp_active            (excp_active),
     .commit_mret            (commit_mret),
     .commit_trap            (commit_trap),
+    .commit_excp            (commit_excp),
+    .commit_irq             (commit_irq ),
     .test_mode              (test_mode),
     .core_wfi               (core_wfi),
     .tm_stop                (tm_stop),
@@ -864,6 +873,11 @@ module e203_core(
   );
 
   e203_context_switch u_e203_context_switch(
+    .exu_thread_sel         (exu_thread_sel  ),
+    .allow_switch           (allow_switch    ),
+    .dbg_mode               (dbg_mode        ),
+    .commit_trap            (commit_trap     ),
+    .commit_mret            (commit_mret     ),
     .long_inst              (long_inst       ),
     .bjp                    (bjp             ),
     .ifetch_wait            (ifetch_wait     ),

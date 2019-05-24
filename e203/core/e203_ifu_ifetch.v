@@ -29,7 +29,8 @@
 module e203_ifu_ifetch(
   output[`E203_PC_SIZE-1:0] inspect_pc,
 
-
+  input commit_excp,
+  input commit_irq,
   input  [`E203_PC_SIZE-1:0] pc_rtvec,  
   //////////////////////////////////////////////////////////////
   //////////////////////////////////////////////////////////////
@@ -193,12 +194,14 @@ module e203_ifu_ifetch(
    wire dly_flush_clr;
    wire dly_flush_ena;
    wire dly_flush_nxt;
+   
+   wire thread_same = (ifu_thread_sel==exu_thread_sel);
 
       // The dly_flush will be set when
       //    * There is a flush requst is coming, but the ifu
       //        is not ready to accept new fetch request
    wire dly_flush_r;
-   assign dly_flush_set = pipe_flush_req & (~ifu_req_hsked);
+   assign dly_flush_set = pipe_flush_req & (~ifu_req_hsked) & (thread_same);
       // The dly_flush_r valid is cleared when 
       //    * The delayed flush is issued
    assign dly_flush_clr = dly_flush_r & ifu_req_hsked;
@@ -233,8 +236,8 @@ module e203_ifu_ifetch(
   wire ifu_rsp_need_replay;
   wire pc_newpend_r;
   wire ifu_ir_i_ready;
-  assign ir_valid_set  = ifu_rsp_hsked & (~pipe_flush_req_real) & (~ifu_rsp_need_replay);
-  assign ir_pc_vld_set = pc_newpend_r & ifu_ir_i_ready & (~pipe_flush_req_real) & (~ifu_rsp_need_replay);
+  assign ir_valid_set  = ifu_rsp_hsked & (~(pipe_flush_req_real & thread_same)) & (~ifu_rsp_need_replay);
+  assign ir_pc_vld_set = pc_newpend_r & ifu_ir_i_ready & (~(pipe_flush_req_real & thread_same)) & (~ifu_rsp_need_replay);
      // The ir valid is cleared when it is accepted by EXU stage *or*
      //   the flush happening 
   assign ir_valid_clr  = ifu_ir_o_hsked | (pipe_flush_hsked & ir_valid_r);
@@ -489,7 +492,7 @@ module e203_ifu_ifetch(
   // The fetch request valid is triggering when
   //      * New ifetch request
   //      * or The flush-request is pending
-  wire ifu_req_valid_pre = ifu_new_req | ifu_reset_req | pipe_flush_req_real | ifetch_replay_req |switch_en;
+  wire ifu_req_valid_pre = ifu_new_req | ifu_reset_req | (pipe_flush_req_real & thread_same) | ifetch_replay_req;
   // The new request ready condition is:
   //   * No outstanding reqeusts
   //   * Or if there is outstanding, but it is reponse valid back
@@ -505,40 +508,43 @@ module e203_ifu_ifetch(
 
   //wire ifu_rsp2ir_ready = (ifu_rsp_replay | pipe_flush_req_real) ? 1'b1 : (ifu_ir_i_ready & (~bpu_wait));
   wire ifu_rsp2ir_ready = (pipe_flush_req_real) ? 1'b1 : (ifu_ir_i_ready & ifu_req_ready & (~bpu_wait));
-
   // Response channel only ready when:
   //   * IR is ready to accept new instructions
   assign ifu_rsp_ready = ifu_rsp2ir_ready;
 
   // The PC will need to be updated when ifu req channel handshaked or a flush is incoming
-  wire pc_ena = ifu_req_hsked | pipe_flush_hsked | switch_en;
+  wire pc_ena = ifu_req_hsked | pipe_flush_hsked;
   
   //context switch
   wire [`E203_PC_SIZE-1:0] pc_rf [`E203_THREADS_NUM-1:0];
   wire [`E203_THREADS_NUM-1:0] pc_wen;
+  wire [`E203_PC_SIZE-1:0] pc_next [`E203_THREADS_NUM-1:0];
   genvar i;
   generate
     for(i=0;i<`E203_THREADS_NUM;i=i+1) begin
-      assign pc_wen[i] = thread_sel[i] & pc_ena;
-      sirv_gnrl_dfflr_init #(`E203_PC_SIZE, 32'h8000_0000+32'h8000*i) pc_dfflr (pc_wen[i], pc_nxt, pc_rf[i], clk, rst_n);
+      assign pc_wen[i] = (ifu_thread_sel[i] & ifu_req_hsked) | (exu_thread_sel[i] & pipe_flush_hsked);
+      assign pc_next[i] = (exu_thread_sel[i] & pipe_flush_req) ? {pipe_flush_pc[`E203_PC_SIZE-1:1],1'b0} :
+                          (ifu_thread_sel[i] & ~dly_pipe_flush_req) ? {pc_nxt_pre[`E203_PC_SIZE-1:1],1'b0} : 
+                          {pc_rf[i][`E203_PC_SIZE-1:1],1'b0};
+                           
+      sirv_gnrl_dfflr_init #(`E203_PC_SIZE, 32'h8000_0000) pc_dfflr (pc_wen[i], pc_next[i], pc_rf[i], clk, rst_n);
     end
   endgenerate
   assign pc_r = ({`E203_PC_SIZE{thread_sel[0]}} & pc_rf[0]) |
                 ({`E203_PC_SIZE{thread_sel[1]}} & pc_rf[1]);
   sirv_gnrl_dfflr #(`E203_THREADS_NUM) thread_sel_dfflr (ir_valid_set | bpu2rf_rs1_ena, thread_sel, exu_thread_sel, clk, rst_n);
   assign ifu_thread_sel = thread_sel;
-  wire [`E203_PC_SIZE-1:0] pc_switch;
-  assign pc_switch = ({`E203_PC_SIZE{thread_sel_next[0]}} & pc_rf[0]) |
-                     ({`E203_PC_SIZE{thread_sel_next[1]}} & pc_rf[1]);
-
+  
   assign long_inst = minidec_mul | minidec_div | minidec_rem | minidec_divu | minidec_remu;
   assign bjp = minidec_bxx | minidec_jalr;
-  assign ifetch_wait = ~ifu_rsp_hsked;
+  
+  //assign ifetch_wait = ~ifu_rsp_hsked;
+  assign ifetch_wait = ~ifu_rsp_hsked | pc_nxt_pre[2:1]==2'b11;
 
   assign inspect_pc = pc_r;
 
-
-  assign ifu_req_pc    = switch_en ? pc_switch : pc_nxt;
+  assign ifu_req_pc    = ({`E203_PC_SIZE{thread_sel_next[0]}} & pc_next[0]) |
+                         ({`E203_PC_SIZE{thread_sel_next[1]}} & pc_next[1]);
 
      // The out_flag will be set if there is a new request handshaked
   wire out_flag_set = ifu_req_hsked;

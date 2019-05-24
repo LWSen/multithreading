@@ -89,6 +89,8 @@ module e203_exu_csr(
   output[`E203_PC_SIZE-1:0]  csr_dpc_r,
   output[`E203_XLEN-1:0]     csr_mtvec_r,
 
+  output allow_switch,
+
 
   input  clk_aon,
   input  clk,
@@ -215,12 +217,19 @@ assign eai_xs_off = 1'b0;// We just make this signal to 0
 assign status_fs_r = 2'b0; 
 `endif
 
+wire status_switch_r;
+wire status_switch_ena = wr_mstatus & wbck_csr_wen;
+wire status_switch_nxt = wbck_csr_dat[30];
+sirv_gnrl_dfflr #(1) status_switch_dfflr (status_switch_ena, status_switch_nxt, status_switch_r, clk, rst_n);
+assign allow_switch = status_switch_r;
+
 //////////////////////////
 // Pack to the full mstatus register
 //
 wire [`E203_XLEN-1:0] status_r;
 assign status_r[31]    = status_sd_r;                        //SD
-assign status_r[30:23] = 8'b0; // Reserved
+assign status_r[30]    = status_switch_r;           //allow multithreading
+assign status_r[29:23] = 7'b0; // Reserved
 assign status_r[22:17] = 6'b0;               // TSR--MPRV
 assign status_r[16:15] = status_xs_r;                        // XS
 assign status_r[14:13] = status_fs_r;                        // FS

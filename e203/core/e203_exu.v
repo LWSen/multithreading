@@ -27,8 +27,11 @@
 `include "e203_defines.v"
 
 module e203_exu(
+  output allow_switch,
   output commit_mret,
   output commit_trap,
+  output commit_excp,
+  output commit_irq,
   output exu_active,
   output excp_active,
 
@@ -740,6 +743,8 @@ module e203_exu(
   e203_exu_commit u_e203_exu_commit(
     .commit_mret         (commit_mret),
     .commit_trap         (commit_trap),
+    .commit_excp         (commit_excp),
+    .commit_irq          (commit_irq ),
     .core_wfi            (core_wfi        ),
     .nonflush_cmt_ena    (nonflush_cmt_ena),
 
@@ -859,6 +864,7 @@ module e203_exu(
 
   e203_exu_csr_top u_e203_exu_csr_top(
     .thread_sel          (exu_thread_sel),
+    .allow_switch        (allow_switch),
     .csr_access_ilgl     (csr_access_ilgl),
     .eai_xs_off          (eai_xs_off),
     .nonflush_cmt_ena    (nonflush_cmt_ena),

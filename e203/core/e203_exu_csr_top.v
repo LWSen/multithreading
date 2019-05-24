@@ -1,5 +1,7 @@
 module e203_exu_csr_top(
   input [`E203_THREADS_NUM-1:0] thread_sel,
+  output allow_switch,
+
   input nonflush_cmt_ena,
   output eai_xs_off,
 
@@ -62,6 +64,7 @@ module e203_exu_csr_top(
   output[`E203_PC_SIZE-1:0]  csr_dpc_r,
   output[`E203_XLEN-1:0]     csr_mtvec_r,
 
+  
 
   input  clk_aon,
   input  clk,
@@ -79,6 +82,7 @@ module e203_exu_csr_top(
   wire [`E203_THREADS_NUM-1:0] top_cmt_status_ena;
   wire [`E203_THREADS_NUM-1:0] top_cmt_instret_ena;
   wire [`E203_THREADS_NUM-1:0] top_cmt_mret_ena;
+  wire [`E203_THREADS_NUM-1:0] top_core_mhartid;
 
   wire [`E203_THREADS_NUM-1:0] top_eai_xs_off;
   wire [`E203_THREADS_NUM-1:0] top_csr_access_ilgl;
@@ -103,6 +107,7 @@ module e203_exu_csr_top(
   wire [`E203_PC_SIZE-1:0]  top_csr_epc_r[`E203_THREADS_NUM-1:0];
   wire [`E203_PC_SIZE-1:0]  top_csr_dpc_r[`E203_THREADS_NUM-1:0];
   wire [`E203_XLEN-1:0]     top_csr_mtvec_r[`E203_THREADS_NUM-1:0];
+  wire [`E203_THREADS_NUM-1:0] top_allow_switch;
   
   
   genvar i;
@@ -118,6 +123,7 @@ module e203_exu_csr_top(
       assign top_cmt_status_ena[i] = cmt_status_ena & thread_sel[i];
       assign top_cmt_instret_ena[i] = cmt_instret_ena & thread_sel[i];
       assign top_cmt_mret_ena[i] = cmt_mret_ena & thread_sel[i];
+      assign top_core_mhartid[i] = (i==0) ? 1'b0 : 1'b1;
 
       e203_exu_csr u_e203_exu_csr(
         .csr_access_ilgl     (top_csr_access_ilgl[i]),
@@ -168,7 +174,7 @@ module e203_exu_csr_top(
         .h_mode        (top_h_mode[i]),
         .m_mode        (top_m_mode[i]),
 
-        .core_mhartid  (core_mhartid),
+        .core_mhartid  (top_core_mhartid[i]),
 
         .status_mie_r  (top_status_mie_r[i]),
         .mtie_r        (top_mtie_r[i]      ),
@@ -178,6 +184,8 @@ module e203_exu_csr_top(
         .ext_irq_r     (ext_irq_r),
         .sft_irq_r     (sft_irq_r),
         .tmr_irq_r     (tmr_irq_r),
+
+        .allow_switch  (top_allow_switch[i]),
 
         .clk_aon       (clk_aon      ),
         .clk           (clk          ),
@@ -255,5 +263,7 @@ module e203_exu_csr_top(
 
   assign csr_mtvec_r = ({`E203_XLEN{thread_sel[0]}} & top_csr_mtvec_r[0]) |
                        ({`E203_XLEN{thread_sel[1]}} & top_csr_mtvec_r[1]); 
+
+  assign allow_switch = top_allow_switch[0];
 
 endmodule

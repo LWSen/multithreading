@@ -31,6 +31,8 @@
 module e203_exu_commit(
   output  commit_mret,
   output  commit_trap,
+  output  commit_excp,
+  output  commit_irq,
   output  core_wfi,
   output  nonflush_cmt_ena,
 
@@ -210,6 +212,8 @@ module e203_exu_commit(
 
   e203_exu_excp u_e203_exu_excp(
     .commit_trap           (commit_trap     ),
+    .commit_excp           (commit_excp     ),
+    .commit_irq            (commit_irq      ),
     .core_wfi              (core_wfi        ),
     .wfi_halt_ifu_req      (wfi_halt_ifu_req),
     .wfi_halt_exu_req      (wfi_halt_exu_req),
